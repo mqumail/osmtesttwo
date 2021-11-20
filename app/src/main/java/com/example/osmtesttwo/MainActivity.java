@@ -10,8 +10,6 @@ import android.graphics.drawable.Drawable;
 import android.location.LocationManager;
 import android.os.Bundle;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -22,31 +20,19 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.res.ResourcesCompat;
 
-import android.view.Menu;
-import android.view.MenuItem;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
 import org.osmdroid.api.IMapController;
 import org.osmdroid.bonuspack.clustering.RadiusMarkerClusterer;
-import org.osmdroid.bonuspack.location.GeoNamesPOIProvider;
-import org.osmdroid.bonuspack.location.NominatimPOIProvider;
 import org.osmdroid.bonuspack.location.OverpassAPIProvider;
 import org.osmdroid.bonuspack.location.POI;
-import org.osmdroid.bonuspack.routing.OSRMRoadManager;
-import org.osmdroid.bonuspack.routing.Road;
-import org.osmdroid.bonuspack.routing.RoadManager;
-import org.osmdroid.bonuspack.routing.RoadNode;
-import org.osmdroid.bonuspack.utils.BonusPackHelper;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.BoundingBox;
-import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.Marker;
-import org.osmdroid.views.overlay.Polyline;
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider;
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay;
 
@@ -73,13 +59,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
-        StrictMode.setThreadPolicy(policy);
-
-        //Set user agent
-        final Context context = getApplicationContext();
-        Configuration.getInstance().load(context, PreferenceManager.getDefaultSharedPreferences(context));
-        Configuration.getInstance().setUserAgentValue(MY_USER_AGENT);
+        init();
 
         map = findViewById(R.id.map);
         map.setTileSource(TileSourceFactory.MAPNIK);
@@ -93,6 +73,7 @@ public class MainActivity extends AppCompatActivity {
         map.getOverlays().add(locationOverlay);
 
         IMapController mapController = map.getController();
+        mapController.animateTo(locationOverlay.getMyLocation(), 0.5, 15L);
         mapController.setZoom(9);
         mapController.setCenter(locationOverlay.getMyLocation());
         map.invalidate();
@@ -164,28 +145,12 @@ public class MainActivity extends AppCompatActivity {
             String searchValue = searchView.getText().toString();
 
             OverpassAPIProvider overpassAPIProvider = new OverpassAPIProvider();
-            String url = overpassAPIProvider.urlForPOISearch("amenity="+searchValue, weimarBoundingBox, 50, 15);
+            String url = overpassAPIProvider.urlForPOISearch("amenity=bar", weimarBoundingBox, 50, 15);
 
-            ArrayList<POI> pois = overpassAPIProvider.getPOIsFromUrl(url);
+            // Get POIs
+            ArrayList<POI> POIs = overpassAPIProvider.getPOIsFromUrl(url);
+
             RadiusMarkerClusterer poiMarkers = new RadiusMarkerClusterer(MainActivity.this);
-
-            //Drop Pins
-            Drawable poiIcon = ResourcesCompat.getDrawable(getResources(), R.drawable.marker_poi_default, null);
-            for (POI poi:pois){
-                Marker poiMarker = new Marker(map);
-                poiMarker.setTitle(poi.mType);
-                poiMarker.setSnippet(poi.mDescription);
-                poiMarker.setPosition(poi.mLocation);
-                poiMarker.setIcon(poiIcon);
-                if (poi.mThumbnail != null){
-                    poiMarker.setImage(new BitmapDrawable(poi.mThumbnail));
-                }
-                poiMarker.setInfoWindow(new CustomInfoWindow(map));
-                poiMarker.setRelatedObject(poi);
-
-                poiMarkers.add(poiMarker);
-            }
-
             Bitmap clusterIcon = getBitmapFromVectorDrawable(MainActivity.this, R.drawable.marker_cluster);
             poiMarkers.setIcon(clusterIcon);
 
@@ -198,8 +163,35 @@ public class MainActivity extends AppCompatActivity {
 
             map.getOverlays().add(poiMarkers);
 
+            //Drop Pins
+            Drawable poiIcon = ResourcesCompat.getDrawable(getResources(), R.drawable.marker_poi_default, null);
+            for (POI poi : POIs){
+                Marker poiMarker = new Marker(map);
+                poiMarker.setTitle(poi.mType);
+                poiMarker.setSnippet(poi.mDescription);
+                poiMarker.setPosition(poi.mLocation);
+                poiMarker.setIcon(poiIcon);
+                if (poi.mThumbnail != null){
+                    poiMarker.setImage(new BitmapDrawable(poi.mThumbnail));
+                }
+                poiMarker.setInfoWindow(new CustomInfoWindow(map));
+                poiMarker.setRelatedObject(poi);
+                poiMarkers.add(poiMarker);
+            }
             map.invalidate();
         });
+    }
+
+    private void init()
+    {
+        //Allow to run on main thread
+        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+        StrictMode.setThreadPolicy(policy);
+
+        //Set user agent
+        final Context context = getApplicationContext();
+        Configuration.getInstance().load(context, PreferenceManager.getDefaultSharedPreferences(context));
+        Configuration.getInstance().setUserAgentValue(MY_USER_AGENT);
     }
 
     // This function is called when user accept or decline the permission.
